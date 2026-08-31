@@ -1,0 +1,2 @@
+Server = https://mirror.parchlinux.com/$repo/$arch
+Server = https://mirror.parchlinux.ir/$repo/$arch

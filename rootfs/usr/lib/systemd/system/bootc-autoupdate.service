@@ -1,0 +1,9 @@
+[Unit]
+Description=Automated Parch Linux Image Update Check & Staging
+Documentation=man:bootc(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bootc upgrade --apply=false
