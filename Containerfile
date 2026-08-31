@@ -6,21 +6,23 @@ ENV KEYRING_IMPORT=noninteractive
 # Copy configuration assets
 COPY rootfs/ /
 
-# Configure Arch and Parch repositories
+# Configure Arch, Parch, and Chaotic-AUR repositories & keys
 RUN pacman-key --init && \
     pacman-key --populate archlinux && \
-    pacman -Sy --noconfirm archlinux-keyring && \
+    pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com && \
+    pacman-key --lsign-key 3056513887B78AEB && \
     sed -i 's/^[[:space:]]*NoExtract/#&/' /etc/pacman.conf
 
-# Inject Parch repository specifications using mirrors from host system
-RUN printf "\n[world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nServer = https://cdn-mirror.chaotic.cx/\$repo/\$arch\n" >> /etc/pacman.conf
+# Inject Parch & Chaotic-AUR repository entries
+RUN printf "\n[world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n" >> /etc/pacman.conf
 
-# Reinstall glibc and upgrade core packages
+# Update keyrings and base packages
 RUN --mount=type=tmpfs,dst=/tmp \
+    pacman -Sy --noconfirm archlinux-keyring && \
     pacman -Syu --noconfirm glibc && \
-    pacman -S --noconfirm parchlinux-keyring || true
+    pacman -S --noconfirm parchlinux-keyring chaotic-keyring chaotic-mirrorlist parch-branding parch-wallpaper-damavand || true
 
-# Install Base System, Linux LTS Kernel, Filesystem Utilities, and Container Stack
+# Install Base System, Linux LTS Kernel, Bootc, Composefs, Filesystem Utilities, and Container Stack
 RUN --mount=type=tmpfs,dst=/tmp \
     pacman -S --noconfirm \
     base \
@@ -29,15 +31,19 @@ RUN --mount=type=tmpfs,dst=/tmp \
     linux-firmware \
     dracut \
     ostree \
+    composefs \
+    bootc \
     skopeo \
     podman \
     flatpak \
+    distrobox \
     btrfs-progs \
     e2fsprogs \
     xfsprogs \
     dosfstools \
     sudo \
     which \
+    curl \
     shadow \
     dbus \
     dbus-glib \
@@ -49,7 +55,16 @@ RUN --mount=type=tmpfs,dst=/tmp \
     pipewire-pulse \
     wireplumber
 
-# Install Minimal KDE Desktop, File Manager (Dolphin), Kate, Ark, Discover, and Firefox
+# Install Waydroid Android runtime, LXC stack, and Parchdroid GUI
+RUN --mount=type=tmpfs,dst=/tmp \
+    pacman -S --noconfirm \
+    waydroid \
+    lxc \
+    dnsmasq \
+    iptables-nft \
+    parchdroid || true
+
+# Install Minimal KDE Desktop, Dolphin, Kate, Ark, Discover, Firefox, and Kontainer
 RUN --mount=type=tmpfs,dst=/tmp \
     pacman -S --noconfirm \
     plasma-desktop \
@@ -65,6 +80,7 @@ RUN --mount=type=tmpfs,dst=/tmp \
     discover \
     packagekit-qt6 \
     firefox \
+    kontainer \
     plasma-nm \
     powerdevil \
     kscreen \
@@ -76,12 +92,11 @@ RUN --mount=type=tmpfs,dst=/tmp \
     xdg-desktop-portal-kde \
     xdg-user-dirs
 
-# Build and Install bootc
-RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
-    pacman -S --noconfirm make git rust go-md2man && \
-    git clone "https://github.com/bootc-dev/bootc.git" /tmp/bootc && \
-    make -C /tmp/bootc bin install-all && \
-    pacman -Rns --noconfirm make git rust go-md2man
+# Download and sideload plasma-setup-git
+RUN --mount=type=tmpfs,dst=/tmp \
+    curl -sL "https://github.com/parchlinux/plasma-setup/releases/download/release-2026.08.31-121018/plasma-setup-git-r560.e772938-1-x86_64.pkg.tar.zst" -o /tmp/plasma-setup.pkg.tar.zst && \
+    pacman -U --noconfirm --needed /tmp/plasma-setup.pkg.tar.zst && \
+    rm -f /tmp/plasma-setup.pkg.tar.zst
 
 # Generate Dracut initramfs with ostree and bootc modules for linux-lts
 RUN KERNEL_DIR=$(find /usr/lib/modules -maxdepth 1 -type d | grep '\-lts' | tail -n 1) && \
@@ -92,6 +107,7 @@ RUN KERNEL_DIR=$(find /usr/lib/modules -maxdepth 1 -type d | grep '\-lts' | tail
 RUN systemctl enable sddm.service && \
     systemctl enable NetworkManager.service && \
     systemctl enable podman.socket && \
+    systemctl enable waydroid-container.service && \
     systemctl enable flatpak-add-flathub.service && \
     systemctl enable bootc-autoupdate.timer
 
@@ -117,6 +133,7 @@ RUN echo 'NAME="Parch Linux"' > /usr/lib/os-release && \
     echo 'ID_LIKE=arch' >> /usr/lib/os-release && \
     echo 'VERSION_ID=rolling' >> /usr/lib/os-release && \
     echo 'HOME_URL="https://parchlinux.com"' >> /usr/lib/os-release && \
+    echo 'LOGO=parch-logo' >> /usr/lib/os-release && \
     echo 'VARIANT="KDE Minimal Immutable"' >> /usr/lib/os-release && \
     echo 'VARIANT_ID=kde-minimal' >> /usr/lib/os-release
 
