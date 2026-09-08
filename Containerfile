@@ -109,12 +109,17 @@ RUN --mount=type=tmpfs,dst=/tmp \
     rm -f /tmp/plasma-setup.pkg.tar.zst && \
     rm -f /etc/xdg/autostart/*plasma-setup*.desktop
 
-# Build and install bootupd
+# Build and install AUR packages (grub-efi, shim-fedora, bootupd)
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
-    pacman -S --noconfirm make git extra/rust pkgconf openssl && \
-    git clone "https://github.com/coreos/bootupd.git" /tmp/bootupd && \
-    make -C /tmp/bootupd all install-all && \
-    pacman -Rns --noconfirm make git rust && \
+    pacman -S --noconfirm --needed base-devel git extra/rust openssl && \
+    useradd -m -d /tmp/build builduser && \
+    echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser && \
+    for pkg in grub-efi shim-fedora bootupd; do \
+        su builduser -c "git clone --depth=1 https://aur.archlinux.org/\${pkg}.git /tmp/build/\${pkg} && cd /tmp/build/\${pkg} && makepkg -si --noconfirm" ; \
+    done && \
+    userdel -r builduser && \
+    rm -f /etc/sudoers.d/builduser && \
+    pacman -Rns --noconfirm git rust || true && \
     pacman -S --clean --noconfirm
 
 # Generate Dracut initramfs with ostree and bootc modules for linux-lts

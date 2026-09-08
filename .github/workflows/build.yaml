@@ -134,6 +134,7 @@ jobs:
             -v "$(pwd)/out":/out \
             ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }} \
             bootc install to-disk \
+            --composefs-backend \
             --via-loopback "/out/${IMG_NAME}" \
             --filesystem btrfs \
             --bootloader systemd \
