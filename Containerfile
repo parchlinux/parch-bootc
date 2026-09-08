@@ -112,11 +112,9 @@ RUN --mount=type=tmpfs,dst=/tmp \
 # Build and install AUR packages (grub-efi, shim-fedora, bootupd)
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
     pacman -S --noconfirm --needed base-devel git extra/rust openssl && \
-    useradd -m -d /tmp/build builduser && \
+    useradd -m -d /tmp/builduser builduser && \
     echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser && \
-    for pkg in grub-efi shim-fedora bootupd; do \
-        su builduser -c "git clone --depth=1 https://aur.archlinux.org/\${pkg}.git /tmp/build/\${pkg} && cd /tmp/build/\${pkg} && makepkg -si --noconfirm" ; \
-    done && \
+    su - builduser -c 'set -e; for pkg in grub-efi shim-fedora bootupd; do git clone --depth=1 "https://aur.archlinux.org/${pkg}.git" "$pkg" && cd "$pkg" && makepkg -si --noconfirm && cd ..; done' && \
     userdel -r builduser && \
     rm -f /etc/sudoers.d/builduser && \
     pacman -Rns --noconfirm git rust || true && \
