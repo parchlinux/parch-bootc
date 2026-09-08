@@ -76,7 +76,7 @@ RUN --mount=type=tmpfs,dst=/tmp \
     plasma-desktop \
     plasma-workspace \
     kwin \
-    sddm \
+    plasma-login-manager \
     konsole \
     dolphin \
     kio \
@@ -123,7 +123,7 @@ RUN KERNEL_DIR=$(find /usr/lib/modules -maxdepth 1 -type d | grep '\-lts' | tail
     dracut --kver "$KERNEL_VER" --force "$KERNEL_DIR/initramfs.img"
 
 # Enable Core Systemd Services
-RUN systemctl enable sddm.service && \
+RUN systemctl enable plasmalogin.service && \
     systemctl enable NetworkManager.service && \
     systemctl enable bluetooth.service && \
     systemctl enable upower.service && \
