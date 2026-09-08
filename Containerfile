@@ -111,10 +111,10 @@ RUN --mount=type=tmpfs,dst=/tmp \
 
 # Build and install bootupd
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
-    pacman -S --noconfirm make git rust cargo pkgconf openssl && \
+    pacman -S --noconfirm make git extra/rust pkgconf openssl && \
     git clone "https://github.com/coreos/bootupd.git" /tmp/bootupd && \
-    make -C /tmp/bootupd bin install-all && \
-    pacman -Rns --noconfirm make git rust cargo pkgconf && \
+    make -C /tmp/bootupd all install-all && \
+    pacman -Rns --noconfirm make git rust pkgconf && \
     pacman -S --clean --noconfirm
 
 # Generate Dracut initramfs with ostree and bootc modules for linux-lts
@@ -130,7 +130,7 @@ RUN systemctl enable plasmalogin.service && \
     systemctl enable podman.socket && \
     systemctl enable waydroid-container.service && \
     systemctl enable plasma-setup.service && \
-    systemctl enable bootupd.socket && \
+    systemctl enable bootloader-update.service && \
     systemctl enable flatpak-add-flathub.service && \
     systemctl enable bootc-autoupdate.timer
 
