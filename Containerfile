@@ -107,7 +107,8 @@ RUN --mount=type=tmpfs,dst=/tmp \
 RUN --mount=type=tmpfs,dst=/tmp \
     curl -sL "https://github.com/parchlinux/plasma-setup/releases/download/release-2026.08.31-121018/plasma-setup-git-r560.e772938-1-x86_64.pkg.tar.zst" -o /tmp/plasma-setup.pkg.tar.zst && \
     pacman -U --noconfirm --needed /tmp/plasma-setup.pkg.tar.zst && \
-    rm -f /tmp/plasma-setup.pkg.tar.zst
+    rm -f /tmp/plasma-setup.pkg.tar.zst && \
+    rm -f /etc/xdg/autostart/*plasma-setup*.desktop
 
 # Build and install bootupd
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
