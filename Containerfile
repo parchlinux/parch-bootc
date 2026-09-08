@@ -13,14 +13,14 @@ RUN pacman-key --init && \
     pacman-key --lsign-key 3056513887B78AEB && \
     printf "\nNoExtract = usr/share/help/* usr/share/doc/* usr/share/man/* usr/share/info/* usr/share/gtk-doc/*\n" >> /etc/pacman.conf
 
-# Inject Parch, Chaotic-AUR, and Void repository entries
-RUN printf "\n[world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n\n[void]\nSigLevel = Optional TrustAll\nServer = https://mirror.parchlinux.ir/\$repo/\$arch\n" >> /etc/pacman.conf
+# Inject Parch [world], Chaotic-AUR, and Void repositories at the top of pacman.conf (before [core])
+RUN sed -i '/^\[core\]/i [world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n\n[void]\nSigLevel = Optional TrustAll\nServer = https://mirror.parchlinux.ir/\$repo/\$arch\n\n' /etc/pacman.conf
 
-# Update keyrings and base packages
+# Update keyrings and base packages, pre-installing Parch font/emoji stack first to prevent noto-fonts-emoji conflict
 RUN --mount=type=tmpfs,dst=/tmp \
     pacman -Sy --noconfirm archlinux-keyring && \
     pacman -Syu --noconfirm glibc && \
-    pacman -S --noconfirm parchlinux-keyring chaotic-keyring chaotic-mirrorlist parch-branding parch-wallpaper-damavand || true
+    pacman -S --noconfirm parchlinux-keyring chaotic-keyring chaotic-mirrorlist parch-branding parch-wallpaper-damavand ttf-apple-emoji parch-emoji-ios || true
 
 # Install Base System, Linux LTS Kernel, Bootc, Composefs, Filesystem Utilities, and Container Stack
 RUN --mount=type=tmpfs,dst=/tmp \
@@ -93,7 +93,6 @@ RUN --mount=type=tmpfs,dst=/tmp \
     kinfocenter \
     flatpak-kcm \
     polkit-kde-agent \
-    parch-emoji-ios \
     breeze \
     breeze-gtk \
     breeze-icons \
