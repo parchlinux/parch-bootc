@@ -1,9 +1,9 @@
 ---
-name: Build Parch Linux bootc Container Image
+name: Build and Deploy Parch Linux bootc
 
 on:
   release:
-    types: [published]
+    types: [published, created]
   pull_request:
     branches:
       - main
@@ -15,14 +15,16 @@ env:
   IMAGE_LOGO_URL: "https://avatars.githubusercontent.com/u/230667510?s=400&u=cb912a5db49aee164a609a0fb4967d2d8170feb9&v=4"
   IMAGE_NAME: "${{ github.event.repository.name }}"
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+  DEFAULT_TAG: "latest"
+  VARIANT: "immutable"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  build_push:
-    name: Build and Push Image
+  build_deploy:
+    name: Build Container & Deploy Raw Image
     runs-on: ubuntu-24.04
 
     permissions:
@@ -48,7 +50,7 @@ jobs:
         id: metadata
         with:
           tags: |
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ env.DEFAULT_TAG }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.release.tag_name != '' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -83,6 +85,7 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           oci: true
+          squash: true
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
@@ -105,3 +108,64 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           username: ${{ env.REGISTRY_USER }}
           password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Install System Dependencies for Image Generation & Deploy
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass rsync xz-utils
+
+      - name: Generate Bootable Disk Image (.img)
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p out
+          IMG_NAME="Parchlinux-${VARIANT}-latest.img"
+          truncate -s 15G "out/${IMG_NAME}"
+          sudo modprobe loop
+          
+          # Run bootc install to create bootable btrfs layout with systemd-boot
+          sudo podman run \
+            --rm \
+            --privileged \
+            --pid=host \
+            --net=host \
+            --security-opt label=type:unconfined_t \
+            -v /dev:/dev \
+            -v "$(pwd)/out":/out \
+            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }} \
+            bootc install to-disk \
+            --via-loopback "/out/${IMG_NAME}" \
+            --filesystem btrfs \
+            --bootloader systemd \
+            --generic-image \
+            --wipe
+
+      - name: Compress Image with tar.xz
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: |
+          cd out
+          IMG_NAME="Parchlinux-${VARIANT}-latest.img"
+          ARCHIVE_NAME="Parchlinux-${VARIANT}-latest.tar.xz"
+          echo "Compressing ${IMG_NAME} to ${ARCHIVE_NAME}..."
+          tar -Scf - "${IMG_NAME}" | xz -T0 -9 > "${ARCHIVE_NAME}"
+          rm -f "${IMG_NAME}"
+          
+          echo "Generating md5sum..."
+          md5sum "${ARCHIVE_NAME}" > md5sum.txt
+          cat md5sum.txt
+
+      - name: Remove Last Image from Mirror
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: sshpass -p "${{ secrets.SSH_PASS }}" ssh -o StrictHostKeyChecking=no parch@${{ secrets.SSH_HOST }} rm -rf /srv/http/${VARIANT}/
+
+      - name: Recreate Mirror Directory
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: sshpass -p "${{ secrets.SSH_PASS }}" ssh -o StrictHostKeyChecking=no parch@${{ secrets.SSH_HOST }} mkdir -p /srv/http/${VARIANT}/
+
+      - name: Upload Image to Mirror Host
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: sshpass -p "${{ secrets.SSH_PASS }}" rsync -avP out/Parchlinux-${VARIANT}-latest.tar.xz parch@${{ secrets.SSH_HOST }}:/srv/http/${VARIANT}/
+
+      - name: Upload md5 to Mirror Host
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: sshpass -p "${{ secrets.SSH_PASS }}" rsync -avP out/md5sum.txt parch@${{ secrets.SSH_HOST }}:/srv/http/${VARIANT}/

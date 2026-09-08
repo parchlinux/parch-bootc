@@ -1,12 +1,12 @@
 [Unit]
-Description=Initialize Flathub Remote Repository
+Description=Initialize Flathub and Install Firefox Flatpak
 After=network-online.target flatpak-system-helper.service
 Wants=network-online.target
-ConditionPathExists=!/var/lib/flatpak/repo/config
+ConditionPathExists=!/var/lib/flatpak/app/org.mozilla.firefox
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+ExecStart=/bin/sh -c '/usr/bin/flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && /usr/bin/flatpak install -y --noninteractive flathub org.mozilla.firefox || true'
 RemainAfterExit=yes
 
 [Install]

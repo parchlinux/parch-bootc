@@ -11,10 +11,10 @@ RUN pacman-key --init && \
     pacman-key --populate archlinux && \
     pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key 3056513887B78AEB && \
-    sed -i 's/^[[:space:]]*NoExtract/#&/' /etc/pacman.conf
+    printf "\nNoExtract = usr/share/help/* usr/share/doc/* usr/share/man/* usr/share/info/* usr/share/gtk-doc/*\n" >> /etc/pacman.conf
 
-# Inject Parch & Chaotic-AUR repository entries
-RUN printf "\n[world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n" >> /etc/pacman.conf
+# Inject Parch, Chaotic-AUR, and Void repository entries
+RUN printf "\n[world]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/parch-mirrors\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n\n[void]\nSigLevel = Optional TrustAll\nServer = https://mirror.parchlinux.ir/\$repo/\$arch\n" >> /etc/pacman.conf
 
 # Update keyrings and base packages
 RUN --mount=type=tmpfs,dst=/tmp \
@@ -27,7 +27,6 @@ RUN --mount=type=tmpfs,dst=/tmp \
     pacman -S --noconfirm \
     base \
     linux-lts \
-    linux-lts-headers \
     linux-firmware \
     dracut \
     ostree \
@@ -53,7 +52,14 @@ RUN --mount=type=tmpfs,dst=/tmp \
     pipewire \
     pipewire-audio \
     pipewire-pulse \
-    wireplumber
+    wireplumber \
+    mesa \
+    vulkan-intel \
+    vulkan-radeon \
+    sof-firmware \
+    upower \
+    bluez \
+    bluez-utils
 
 # Install Waydroid Android runtime, LXC stack, and Parchdroid GUI
 RUN --mount=type=tmpfs,dst=/tmp \
@@ -64,7 +70,7 @@ RUN --mount=type=tmpfs,dst=/tmp \
     iptables-nft \
     parchdroid || true
 
-# Install Minimal KDE Desktop, Dolphin, Kate, Ark, Discover, Firefox, and Kontainer
+# Install Minimal KDE Desktop, Dolphin, Kate, Ark, Parchstore, Firefox, and Kontainer
 RUN --mount=type=tmpfs,dst=/tmp \
     pacman -S --noconfirm \
     plasma-desktop \
@@ -77,16 +83,21 @@ RUN --mount=type=tmpfs,dst=/tmp \
     kio-extras \
     kate \
     ark \
-    discover \
-    packagekit-qt6 \
-    firefox \
+    pastor \
     kontainer \
     plasma-nm \
+    plasma-pa \
     powerdevil \
     kscreen \
+    bluedevil \
+    kinfocenter \
+    flatpak-kcm \
+    polkit-kde-agent \
+    parch-emoji-ios \
     breeze \
     breeze-gtk \
     breeze-icons \
+    kde-gtk-config \
     qt6-wayland \
     layer-shell-qt \
     xdg-desktop-portal-kde \
@@ -98,6 +109,14 @@ RUN --mount=type=tmpfs,dst=/tmp \
     pacman -U --noconfirm --needed /tmp/plasma-setup.pkg.tar.zst && \
     rm -f /tmp/plasma-setup.pkg.tar.zst
 
+# Build and install bootupd
+RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
+    pacman -S --noconfirm make git rust cargo pkgconf openssl && \
+    git clone "https://github.com/coreos/bootupd.git" /tmp/bootupd && \
+    make -C /tmp/bootupd bin install-all && \
+    pacman -Rns --noconfirm make git rust cargo pkgconf && \
+    pacman -S --clean --noconfirm
+
 # Generate Dracut initramfs with ostree and bootc modules for linux-lts
 RUN KERNEL_DIR=$(find /usr/lib/modules -maxdepth 1 -type d | grep '\-lts' | tail -n 1) && \
     KERNEL_VER=$(basename "$KERNEL_DIR") && \
@@ -106,8 +125,12 @@ RUN KERNEL_DIR=$(find /usr/lib/modules -maxdepth 1 -type d | grep '\-lts' | tail
 # Enable Core Systemd Services
 RUN systemctl enable sddm.service && \
     systemctl enable NetworkManager.service && \
+    systemctl enable bluetooth.service && \
+    systemctl enable upower.service && \
     systemctl enable podman.socket && \
     systemctl enable waydroid-container.service && \
+    systemctl enable plasma-setup.service && \
+    systemctl enable bootupd.socket && \
     systemctl enable flatpak-add-flathub.service && \
     systemctl enable bootc-autoupdate.timer
 
@@ -123,8 +146,11 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     ln -sT var/home /home && \
     ln -sT ../var/usrlocal /usr/local
 
-# Remove pacman and package management traces for a fully immutable OS
-RUN rm -rf /etc/pacman* /var/lib/pacman /var/cache/pacman /usr/lib/sysimage/pacman /usr/share/pacman /usr/bin/pacman* /usr/bin/makepkg*
+# Remove pacman and developer/temporary artifacts for an ultra-lean immutable OS
+RUN rm -rf /etc/pacman* /var/lib/pacman /var/cache/pacman /usr/lib/sysimage/pacman /usr/share/pacman /usr/bin/pacman* /usr/bin/makepkg* && \
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /usr/share/gtk-doc/* /usr/include/* /root/.cargo /root/.rustup /root/.cache && \
+    find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'fa*' ! -name 'locale.alias' -exec rm -rf {} + && \
+    find /usr/lib /usr/lib64 -name "*.a" -delete 2>/dev/null || true
 
 # Write OS Release metadata
 RUN echo 'NAME="Parch Linux"' > /usr/lib/os-release && \
