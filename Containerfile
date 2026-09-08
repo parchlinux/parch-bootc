@@ -114,7 +114,7 @@ RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
     pacman -S --noconfirm make git extra/rust pkgconf openssl && \
     git clone "https://github.com/coreos/bootupd.git" /tmp/bootupd && \
     make -C /tmp/bootupd all install-all && \
-    pacman -Rns --noconfirm make git rust pkgconf && \
+    pacman -Rns --noconfirm make git rust && \
     pacman -S --clean --noconfirm
 
 # Generate Dracut initramfs with ostree and bootc modules for linux-lts
